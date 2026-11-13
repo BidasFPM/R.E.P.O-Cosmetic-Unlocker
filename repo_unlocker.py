@@ -7,7 +7,7 @@ File location (Windows):
     %AppData%\\..\\LocalLow\\semiwork\\Repo\\MetaSave.es3
 
 Usage:
-    python repo_unlock_cosmetics.py
+    python repo_unlocker.py
     (the script finds the save automatically; or pass the path as an argument)
 
 Requirements:
@@ -15,6 +15,9 @@ Requirements:
 
 The script always creates a backup (.bak) before modifying the file.
 Format: AES-128-CBC + PBKDF2-SHA1 (Easy Save 3)
+
+Works both with a console and as a windowed build (PyInstaller --noconsole):
+without a console, messages are shown in popup windows instead.
 """
 
 import json
@@ -36,12 +39,32 @@ ES3_PASSWORD = "Why would you want to cheat?... :o It's no fun. :') :'D"
 TOTAL_COSMETICS = 557
 
 
+def show(msg: str):
+    """Print if a console exists, otherwise show a popup window."""
+    if sys.stdout is not None:
+        try:
+            print(msg)
+            return
+        except Exception:
+            pass
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showinfo("REPO Unlocker", msg)
+        root.destroy()
+    except Exception:
+        pass
+
+
 def default_save_path():
     local_low = os.path.join(os.environ.get("USERPROFILE", ""), "AppData", "LocalLow")
     return os.path.join(local_low, "semiwork", "Repo", "MetaSave.es3")
 
 
-def decrypt_es3(data: bytes, password: str) -> dict:
+def decrypt_es3(data: bytes, password: str):
     salt = data[:16]
     key = PBKDF2(password.encode(), salt, dkLen=16, count=100, hmac_hash_module=SHA1)
     cipher = AES.new(key, AES.MODE_CBC, IV=salt)
@@ -56,10 +79,10 @@ def encrypt_es3(json_obj: dict, password: str, salt: bytes) -> bytes:
     return salt + cipher.encrypt(pad(raw, AES.block_size))
 
 
-def unlock_all_cosmetics(path: str, total: int = TOTAL_COSMETICS):
+def unlock_all_cosmetics(path: str, total: int = TOTAL_COSMETICS) -> bool:
     if not os.path.isfile(path):
-        print(f"File not found: {path}")
-        sys.exit(1)
+        show(f"File not found: {path}")
+        return False
 
     with open(path, "rb") as f:
         raw_data = f.read()
@@ -67,16 +90,15 @@ def unlock_all_cosmetics(path: str, total: int = TOTAL_COSMETICS):
     try:
         data, salt = decrypt_es3(raw_data, ES3_PASSWORD)
     except Exception as e:
-        print("Failed to decrypt. The file may have an unexpected format "
-              "or the password may have changed in a game update.")
-        print(f"Details: {e}")
-        sys.exit(1)
+        show("Failed to decrypt. The file may have an unexpected format "
+             "or the password may have changed in a game update.\n"
+             f"Details: {e}")
+        return False
 
     # Backup before any modifications
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = f"{path}.{timestamp}.bak"
     shutil.copy2(path, backup_path)
-    print(f"Backup created at: {backup_path}")
 
     all_ids = list(range(total))
 
@@ -97,20 +119,26 @@ def unlock_all_cosmetics(path: str, total: int = TOTAL_COSMETICS):
     with open(path, "wb") as f:
         f.write(new_bytes)
 
-    print(f"Cosmetics unlocked: {before} -> {total}")
-    print("Save file successfully updated.")
-    print("IMPORTANT: Disable Steam Cloud for REPO before opening the game, "
-          "otherwise the synchronized save may overwrite this change.")
+    show(f"Backup created at: {backup_path}\n"
+         f"Cosmetics unlocked: {before} -> {total}\n"
+         "Save file successfully updated.\n\n"
+         "IMPORTANT: Disable Steam Cloud for REPO before opening the game, "
+         "otherwise the synchronized save may overwrite this change.")
+    return True
 
 
 if __name__ == "__main__":
     save_path = sys.argv[1] if len(sys.argv) > 1 else default_save_path()
-    print(f"Using save file: {save_path}")
+    show(f"Using save file: {save_path}")
 
     try:
         unlock_all_cosmetics(save_path)
     except Exception as e:
-        print(f"\nUnexpected error: {e}")
+        show(f"Unexpected error: {e}")
 
-    print()
-    input("Press ENTER to close this window...")
+    # Only wait for ENTER if a real console exists
+    if sys.stdin is not None:
+        try:
+            input("\nPress ENTER to close this window...")
+        except (RuntimeError, EOFError):
+            pass
