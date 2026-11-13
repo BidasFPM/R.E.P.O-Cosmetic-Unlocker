@@ -33,7 +33,7 @@ ES3_PASSWORD = "Why would you want to cheat?... :o It's no fun. :') :'D"
 
 # Total number of cosmetics in the game (id 0 to TOTAL_COSMETICS-1). If Semiwork adds
 # more cosmetics in a future update, you only need to increase this number.
-TOTAL_COSMETICS = 547
+TOTAL_COSMETICS = 557
 
 
 def default_save_path():
